@@ -1,21 +1,23 @@
 package com.xsh.service;
 
-import com.xsh.entity.Student;
-import com.xsh.structure.BPlusTree;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.InitializingBean;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.annotation.PreDestroy;
 
-import java.io.*;
-import java.util.List;
-import java.util.ArrayList;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import com.xsh.entity.Student;
+import com.xsh.structure.BPlusTree;
 
 @Service
 public class StudentServiceImpl implements StudentService, InitializingBean {
     @Value("${data.storage.path}")
     private String dataStoragePath;
-    
+
     private String getDataFilePath() {
         // 使用 classpath 相对路径
         return "backend/" + dataStoragePath + File.separator + "students.dat";
@@ -52,9 +54,10 @@ public class StudentServiceImpl implements StudentService, InitializingBean {
 
     @Override
     public void insertStudent(Student student) {
-        // 直接使用学生提供的学号作为键
-        bPlusTree.insert(student.getNumber(), student);
-        saveData(); // 保存更改
+        // 创建学生对象的克隆，避免引用问题
+        Student studentClone = student.clone();
+        bPlusTree.insert(studentClone.getNumber(), studentClone);
+        saveData();
         System.out.println("已添加学生，学号: " + student.getNumber());
     }
 
@@ -64,7 +67,7 @@ public class StudentServiceImpl implements StudentService, InitializingBean {
         if (bPlusTree.search(studentId) != null) {
             // 创建新的B+树
             BPlusTree<Integer, Student> newTree = new BPlusTree<>(1000);
-            
+
             // 遍历所有学生数据
             List<Student> allStudents = getAllStudents();
             for (Student student : allStudents) {
@@ -72,7 +75,7 @@ public class StudentServiceImpl implements StudentService, InitializingBean {
                     newTree.insert(student.getNumber(), student);
                 }
             }
-            
+
             // 替换旧树
             bPlusTree = newTree;
             saveData(); // 保存更改
@@ -83,24 +86,12 @@ public class StudentServiceImpl implements StudentService, InitializingBean {
     @Override
     public void updateStudent(Student student) {
         int number = student.getNumber();
-        Student existingStudent = bPlusTree.search(number);
-        if (existingStudent != null) {
-            existingStudent.setName(student.getName());
-            existingStudent.setSex(student.getSex());
-            existingStudent.setPhoneNumber(student.getPhoneNumber());
-            existingStudent.setMail(student.getMail());
-            existingStudent.setAge(student.getAge());
-            
-            // 确保更新专业时处理空值
-            String major = student.getMajor();
-            if (major == null || major.trim().isEmpty()) {
-                major = "未设置";
-            }
-            existingStudent.setMajor(major);
-            // 更新后的学生信息重新插入到B+树中
-            bPlusTree.insert(number, existingStudent);
+        if (bPlusTree.search(number) != null) {
+            // 创建更新数据的克隆，避免引用问题
+            Student studentClone = student.clone();
+            bPlusTree.insert(number, studentClone);
             System.out.println("学生信息已更新");
-            saveData(); // 保存更改
+            saveData();
         } else {
             System.out.println("未找到该学生信息");
         }
@@ -129,13 +120,13 @@ public class StudentServiceImpl implements StudentService, InitializingBean {
     public List<Student> searchStudents(String type, String keyword) {
         List<Student> allStudents = getAllStudents();
         List<Student> results = new ArrayList<>();
-        
+
         if (keyword == null || keyword.trim().isEmpty()) {
             return allStudents;
         }
-        
+
         keyword = keyword.trim().toLowerCase();
-        
+
         for (Student student : allStudents) {
             boolean matches = false;
             switch (type) {
@@ -151,14 +142,14 @@ public class StudentServiceImpl implements StudentService, InitializingBean {
                     break;
                 default:
                     matches = student.getName().toLowerCase().contains(keyword) ||
-                             String.valueOf(student.getNumber()).contains(keyword) ||
-                             student.getMajor().toLowerCase().contains(keyword);
+                            String.valueOf(student.getNumber()).contains(keyword) ||
+                            student.getMajor().toLowerCase().contains(keyword);
             }
             if (matches) {
                 results.add(student);
             }
         }
-        
+
         return results;
     }
 }
